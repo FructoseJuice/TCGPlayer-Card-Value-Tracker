@@ -130,7 +130,7 @@ def calculateValues(hostDir):
         #Format value
         value = "$%0.2f" % value
         #Print key and value
-        print("%s%s", (key.ljust(padLen), value))
+        print("%s%s" % (key.ljust(padLen), value))
     #Print tail
     print("--------------------")
     input()
