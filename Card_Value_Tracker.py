@@ -6,7 +6,7 @@ import json
 def verifyFiles():
     #Ensure existence of directory and file
     userName = os.getlogin()
-    hostDir = "C:\\Users\\"+userName+"\\Documents\\PokemonCardValues"
+    hostDir = "C:\\Users\\"+userName+"\\Documents\\CardValues"
 
     #Create dir
     if(not os.path.isdir(hostDir)):
