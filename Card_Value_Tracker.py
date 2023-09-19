@@ -20,11 +20,12 @@ def verifyFiles():
             exit()
             
     #Create file
-    fileName = "cards_list.txt"
-    hostDir = hostDir + "\\" + fileName
+    hostDir = hostDir + "\\cards_list.txt"
     
     if(not os.path.isfile(hostDir)):
+        #Attempt to create file
         f = open(hostDir, 'x')
+
         if(not os.path.isfile(hostDir)):
             print(">>Could Not Create File.")
             input()
@@ -43,6 +44,7 @@ def calculateValues(hostDir):
     with open(hostDir, "r") as fr:
         fr.seek(0)
         fileContent = fr.read().split(',')
+        #Remove empty element at end of list
         fileContent.pop()
 
     #Short circuit if database empty
@@ -52,10 +54,11 @@ def calculateValues(hostDir):
         return
 
     cards = {}
-
-    print(">>Retrieving Values...")
     j = 0
     k = 0
+
+    print(">>Retrieving Values...")
+    
     #Load cards in Dict
     for i in range(len(fileContent)):
         #Print loading wheel
@@ -73,6 +76,7 @@ def calculateValues(hostDir):
             j += 1
             
         #Load in next card
+        #(Card print type, Card ID)
         card = fileContent[i].split(":")
 
         #Make requests
@@ -89,7 +93,7 @@ def calculateValues(hostDir):
             i += 1
 
         
-        #-----Load new value
+        #-----Load new card in
         #CREATE KEY
         #Card_Type print Card_Name => Card_Value
         s1 = card[0].capitalize().ljust(7)
@@ -121,10 +125,13 @@ def calculateValues(hostDir):
     #Print high to low by price
     print("High to low by cost =>\n")
     for key, value in cards.items():
+        #Format key
         key = "%s:" % key
+        #Format value
         value = "$%0.2f" % value
-        print(key.ljust(padLen), end='')
-        print(value)
+        #Print key and value
+        print("%s%s", (key.ljust(padLen), value))
+    #Print tail
     print("--------------------")
     input()
 
@@ -173,7 +180,7 @@ def cardEntry(hostDir):
 
             #Validate and store input
             if(response.status_code != 200):
-                print(">>Invalid id.\n")
+                print(">>Invalid ID.\n")
             else:
                 #Validate Card type
                 url = "https://mpapi.tcgplayer.com/v2/product/"+str(newCard)+"/pricepoints?mpfev=1814"
@@ -184,7 +191,9 @@ def cardEntry(hostDir):
                 cardTypes = []
                 
                 for i in range(len(data)):
+                    #Retrieve print types
                     cardTypes.append(data[i].get("printingType").lower())
+
                 print("Enter Card Type: ", end='')
                 print(cardTypes)
                 print()
@@ -193,11 +202,11 @@ def cardEntry(hostDir):
                 cardType = input()
                 
                 while(not(cardType.lower() in cardTypes)):
-                    print(">>Invalid Input:\n")
+                    print(">>Invalid Print Type.\n")
                     print("Enter Card Type: ", end='')
                     print(cardTypes)
 
-                    cardTypes = input()
+                    cardType = input()
                 
                 if str(newCard) in fileContent:
                     #Check if in file
