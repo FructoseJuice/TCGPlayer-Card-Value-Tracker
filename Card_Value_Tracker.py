@@ -37,83 +37,91 @@ def verifyFiles():
 
     return hostDir
 
+def readDataBase(hostDir):
+    #Retrieve file contents
+    with open(hostDir, 'r') as fr:
+        #Retrieve file contents
+        fr.seek(0)
+        cardsArr = fr.read().split(',')
+        #Prune away eroneous element
+        cardsArr.pop()
+
+    cardsDict = {}
+
+    #Populate dictionary
+    for entry in cardsArr:
+        split = entry.split('?')
+        pair = split[1].split(':')
+        #{"cardID": (printType, quantity)}
+        cardsDict[int(split[0])] = [pair[0], int(pair[1])]
+
+    return cardsDict
+
+def updateDataBase(hostDir, newContent):
+    #Update database
+    with open(hostDir, 'w+') as fw:
+        #Update database
+        for card in newContent.items():
+            entry = "%s?%s:%s," % (card[0], card[1][0], card[1][1])
+            fw.write(entry)
+
 def calculateValues(hostDir):
     print()
     
     #Retrieve card IDs
-    with open(hostDir, "r") as fr:
-        fr.seek(0)
-        fileContent = fr.read().split(',')
-        #Remove empty element at end of list
-        fileContent.pop()
-
+    cardsDict = readDataBase(hostDir)
     #Short circuit if database empty
-    if(len(fileContent) == 0):
+    if(len(cardsDict) == 0):
         print(">>Empty Database.\n")
         main()
         return
 
+    i = 0
     cards = {}
-    j = 0
-    k = 0
 
     print(">>Retrieving Values...")
     
     #Load cards in Dict
-    for i in range(len(fileContent)):
-        #Print loading wheel
-        if(i % 2 == 0):
-            if(k % 2 == 0):
-                print("/", end='')
-            else:
-                print("\\", end='')
-            k += 1
-        else:
-            if(j % 2 == 0):
-                print("|", end='')
-            else:
-                print("-", end='')
-            j += 1
-            
-        #Load in next card
-        #(Card print type, Card ID)
-        card = fileContent[i].split(":")
+    for card in cardsDict.items():
 
         #Make requests
-        response = requests.get("https://mp-search-api.tcgplayer.com/v1/product/%s/details" % card[1])
+        response = requests.get("https://mp-search-api.tcgplayer.com/v1/product/%s/details" % card[0])
         data = response.json()
         name = data.get("productName")
         
-        response = requests.get("https://mpapi.tcgplayer.com/v2/product/%s/pricepoints?mpfev=1814" % card[1])
+        response = requests.get("https://mpapi.tcgplayer.com/v2/product/%s/pricepoints?mpfev=1814" % card[0])
         data = response.json()
         
         #Seek out card type
         i = 0
-        while(data[i].get("printingType").lower() != card[0]):
+        while(data[i].get("printingType").lower() != card[1][0]):
             i += 1
 
-        
         #-----Load new card in
         #CREATE KEY
         #Card_Type print Card_Name => Card_Value
-        s1 = card[0].capitalize().ljust(7)
+        s1 = card[1][0].capitalize().ljust(7)
         #Finalize key
-        key = "%s print %s" % (s1, name)
+        key = "(%s) %s print %s" % (card[1][1],s1, name)
         
         if(data[i].get("marketPrice") == None):
             #Put in 0 if value null
-            cards[key] = 0
+            cards[key] = [0, 0]
         else:
             #Store new pair
-            cards[key] = float(data[i].get("marketPrice"))
+            cards[key] = [float(data[i].get("marketPrice")), card[1][1]]
 
     #Sort by card value in reverse order
-    cards = dict(sorted(cards.items(), key=lambda x: x[1])[::-1])
+    cards = dict(sorted(cards.items(), key=lambda x: x[1][0])[::-1])
 
     #-------PRINT OUT CARDS----------
     print("\n--------------------")
     #Print Total Cost
-    print("\nTotal Cost: $%0.2f\n" % float(sum(cards.values())))
+    total = 0
+    for price in cards.values():
+        #Card cost x Quantity
+        total += price[0] * price[1]
+    print("\nTotal Cost: $%0.2f\n" % total)
 
     #Find longest string for formatting
     padLen = 0
@@ -128,39 +136,37 @@ def calculateValues(hostDir):
         #Format key
         key = "%s:" % key
         #Format value
-        value = "$%0.2f" % value
+        value = "$%0.2f" % value[0]
         #Print key and value
         print("%s%s" % (key.ljust(padLen), value))
+
     #Print tail
     print("--------------------")
     input()
 
-
 def cardEntry(hostDir):
     while(True):
-        with open(hostDir, "a+") as fw:
-            #Retrieve file contents
-            fw.seek(0)
-            fileContent = fw.read().split(',')
-            fileContent.pop()
-            
             #Get next card
             newCard = input("\nEnter card id or url. (-1) to go back.\n")
-
-            #Go back to start if input -1
-            try:
-                if(int(newCard) == -1):
-                    main()
-                    break
-            except:
-                pass
 
             #Parse input
             try:
                 #If int, it's an id
                 newCard = int(newCard)
+
+                #Check if going back to menu
+                if(newCard == -1):
+                    main()
+                    break
             except:
                 #Possibly a Link
+                #Check if tcgplayer link
+                if ("tcgplayer.com" not in newCard):
+                    print(">>Invalid Input.\n")
+                    continue
+
+                #Sanitize input and extract card id
+                #Split by /
                 arr = newCard.split('/')
                 #Strip https:
                 if(arr[0] == "https:"):
@@ -178,7 +184,7 @@ def cardEntry(hostDir):
             url = "https://mp-search-api.tcgplayer.com/v1/product/"+str(newCard)+"/details"
             response = requests.get(url)
 
-            #Validate and store input
+            #Retreive price points
             if(response.status_code != 200):
                 print(">>Invalid ID.\n")
             else:
@@ -207,32 +213,112 @@ def cardEntry(hostDir):
                     print(cardTypes)
 
                     cardType = input()
+
+            #Retrieve database
+            cardsDict = readDataBase(hostDir)
+
+            #Check if in database
+            if (newCard in cardsDict):
+                #Update quantity of card
+                oldQuantity = cardsDict.get(newCard)[1]
+                cardsDict.get(newCard)[1] = oldQuantity + 1
+            else:
+                #Enter new card
+                cardsDict[newCard] = [cardType, 1]
+            
+            updateDataBase(hostDir, cardsDict)
+            
+def removeCard(hostDir):
+    cardToRemId = -1
+    cardsDict = readDataBase(hostDir)
+
+    while(True):
+        #Short circuit if database empty
+        if(len(cardsDict) == 0):
+            print(">>Empty Database.\n")
+            main()
+            return
+            
+        cardToRemId = input("\n>>Enter card id or URL to remove. (-1) to return to menu.\n")
+            
+        #Parse input
+        try:
+            #If int, it's an id
+            cardToRemId = int(cardToRemId)
+            #Check if -1
+            if(cardToRemId <= 0):
+                main()
+                break
                 
-                if str(newCard) in fileContent:
-                    #Check if in file
-                    print(">>Card Already In Database.\n")
-                else:
-                    print(">>Card Successfully Entered!\n")
-                    #Write to file if valid
-                    fw.write("%s:%s," % (cardType, str(newCard)))
-                
+        except:
+            #Possibly a Link
+            if ("tcgplayer.com" not in str(cardToRemId)):
+                print(">>Invalid Input.\n")
+                continue
+            #Sanitize input and extract card id
+            #Split by /
+            arr = cardToRemId.split('/')
+            #Strip https:
+            if(arr[0] == "https:"):
+                arr.pop(0)
+            if(arr[0] == ''):
+                arr.pop(0)
+            #tcg.com/product/id"
+            try:
+                cardToRemId = int(arr[2])
+            except:
+                print(">>Invalid Input.\n")
+                continue
+        
+        break
+    
+    if cardToRemId in cardsDict.keys():
+        #Confirm deletion with user
+        #Grab name
+        response = requests.get("https://mp-search-api.tcgplayer.com/v1/product/%s/details" % cardToRemId)
+        name = response.json().get("productName")
+        #Prompt user
+        confirmation = input("Remove \"%s\"? \"Yes\" or \"No\":\n" % name)
+        #Initiate deletion
+        if(confirmation.lower() == "yes"):
+            #Update quantity if q > 1
+            if(cardsDict[cardToRemId][1] != 1):
+                quantity = cardsDict[cardToRemId][1]
+                cardsDict[cardToRemId][1] = quantity - 1
+            else:
+                cardsDict.pop(cardToRemId)
+            
+            with open(hostDir, 'w+') as fw:
+                updateDataBase(hostDir, cardsDict)
+
+            print(">>Card Successfully removed.\n")
+        else:
+            print(">>Canceling deletion.\n")
+    else:
+        print(">>Card not in database.\n")
+        
+    #Go back to menu
+    main()
+
 
 def main():
     #Verify data file exists, and grab path
     hostDir = verifyFiles()
 
     #Recieve command
-    command = int(input("Please choose an action:\n(1) Enter new cards\n(2) Calculate Values\n"))
+    command = int(input("Please choose an action:\n(1) Enter new cards\n(2) Calculate Values\n(3) Remove Card\n"))
 
     #Check input
-    while(command != 1 and command != 2):
+    while(command <= 0 or command > 3):
         print(">>Invalid Input, Try Again.\n")
-        command = int(input("Please choose an action:\n(1) Enter new cards\n(2) Calculate Values\n"))
+        command = int(input("Please choose an action:\n(1) Enter new cards\n(2) Calculate Values\n(3) Remove Card\n"))
         
     #Exeggute command
     if(command == 1):
         cardEntry(hostDir)
-    else:
+    elif(command == 2):
         calculateValues(hostDir)
+    else:
+        removeCard(hostDir)
     
 main()
