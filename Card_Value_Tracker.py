@@ -45,6 +45,9 @@ def readDataBase(hostDir):
         cardsArr = fr.read().split(',')
         #Prune away eroneous element
         cardsArr.pop()
+        
+    if len(cardsArr) == 0:
+        return {}
 
     cardsDict = {}
 
@@ -227,6 +230,7 @@ def cardEntry(hostDir):
                 cardsDict[newCard] = [cardType, 1]
             
             updateDataBase(hostDir, cardsDict)
+            print(">>Card Successfully Entered.\n")
             
 def removeCard(hostDir):
     cardToRemId = -1
